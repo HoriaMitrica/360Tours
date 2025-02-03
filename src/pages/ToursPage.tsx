@@ -1,33 +1,66 @@
-import React from "react";
+import React, { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const ToursPage: React.FC = () => {
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const encodedData = params.get("data");
+
+    if (encodedData) {
+      try {
+        const decodedData = atob(encodedData);
+        localStorage.setItem("tour_data", decodedData);
+        alert("Tour loaded from shared link!");
+      } catch (error) {
+        alert("Invalid tour data.");
+      }
+    }
+  }, []);
+
   const handleCreateTour = () => {
+    localStorage.removeItem("tour_data");
+
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
-    input.onchange = (event: Event) => {
+
+    input.onchange = async (event: Event) => {
       const file = (event.target as HTMLInputElement).files?.[0];
       if (!file) return;
 
-      // Generate a unique ID for this tour
-      const newId = Date.now().toString(); // Ensure ID is a string
+      const formData = new FormData();
+      formData.append("file", file);
 
-      // Create a temporary URL for the image
-      const objectURL = URL.createObjectURL(file);
+      try {
+        const response = await fetch("https://tours360.cleancodeacademy.ro/upload.php", {
+          method: "POST",
+          body: formData,
+        });
+        const result = await response.json();
+        if (result.status !== "success") {
+          alert(result.message || "File upload failed.");
+          return;
+        }
+        const uploadedFileUrl = result.url;
 
-      // Store tour data in sessionStorage
-      const initialTourData = JSON.stringify({ imageUrl: objectURL, links: {} });
-      sessionStorage.setItem(`tour_${newId}`, initialTourData);
-
-      // Debugging: Log to verify it is stored
-      console.log("Stored Tour Data:", sessionStorage.getItem(`tour_${newId}`));
-
-      // Redirect to the edit page with the correct ID
-      navigate(`/tours/${newId}/edit`);
+        setTimeout(() => {
+          const name = prompt("Enter a name for this tour:");
+          if (!name || name.trim() === "") {
+            alert("Tour name is required.");
+            return;
+          }
+          const newId = Date.now().toString();
+          const initialTourData = JSON.stringify({ name, imageUrl: uploadedFileUrl, links: {} });
+          sessionStorage.setItem(`tour_${newId}`, initialTourData);
+          navigate(`/tours/${newId}/edit`);
+        }, 100);
+      } catch (error) {
+        alert("File upload failed.");
+      }
     };
+
     input.click();
   };
 
